@@ -2,7 +2,7 @@
 #include <sstream>
 
 using namespace std;
-
+//Testing update
 LogRecord* LogRecord::stringToRecordPtr(string rec_string){
   stringstream ss(rec_string);
   int lsn, prevLSN, txID;
