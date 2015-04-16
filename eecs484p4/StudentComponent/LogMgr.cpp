@@ -1,5 +1,6 @@
 #include "LogMgr.h"
 #include <sstream>
+#include <iostream>
 
 using namespace std;
 
@@ -45,7 +46,16 @@ void LogMgr::flushLogTail(int maxLSN)
 /* 
 * Run the analysis phase of ARIES.
 */
-void LogMgr::analyze(vector <LogRecord*> log) { return; }
+void LogMgr::analyze(vector <LogRecord*> log) { 
+
+	/* Search from the end of the log until checkpoint reached */
+	int i = log.size() - 1;
+	while (i >= 0 && log[i]->getType() != END_CKPT)
+	{
+		std::cout << log[i]->getType();
+		i--;
+	}
+	return; }
 
 /*
 * Run the redo phase of ARIES.
@@ -93,7 +103,20 @@ void LogMgr::recover(string log) { return; }
 /*
 * Logs an update to the database and updates tables if needed.
 */
-int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) { return 0; }
+int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) {
+	int next = se->nextLSN();
+	int last = getLastLSN(txid);
+	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
+	logtail.push_back(&newRecord);
+
+	if (dirty_page_table.find(page_id) == dirty_page_table.end())
+		dirty_page_table[page_id] = next;
+
+	txTableEntry t(last, U);
+	tx_table[next] = t;
+
+	return next;
+}
 
 /*
 * Sets this.se to engine. 
