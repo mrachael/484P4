@@ -105,7 +105,14 @@ void LogMgr::recover(string log) { return; }
 */
 int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) {
 	int next = se->nextLSN();
-	int last = getLastLSN(txid);
+	int last;
+
+	if (tx_table.empty())
+		last = 0;
+	else 
+		last = getLastLSN(txid);
+	cout << last << endl;
+
 	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
 	logtail.push_back(&newRecord);
 
@@ -115,10 +122,15 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 	txTableEntry t(last, U);
 	tx_table[next] = t;
 
+	cout << "Made it!" << endl;
 	return next;
 }
 
 /*
 * Sets this.se to engine. 
 */
-void LogMgr::setStorageEngine(StorageEngine* engine) { return; }
+void LogMgr::setStorageEngine(StorageEngine* engine) { 
+	this->se = engine;
+
+	return;
+}
