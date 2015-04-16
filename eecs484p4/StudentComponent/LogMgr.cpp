@@ -9,13 +9,20 @@ using namespace std;
 * If there is no previous log record for this TX, return 
 * the null LSN.
 */
-int LogMgr::getLastLSN(int txnum) { return 0; }
+int LogMgr::getLastLSN(int txnum) 
+{
+	return tx_table[txnum].lastLSN;
+}
 
 /*
 * Update the TX table to reflect the LSN of the most recent
 * log entry for this transaction.
 */
-void LogMgr::setLastLSN(int txnum, int lsn) { return; }
+void LogMgr::setLastLSN(int txnum, int lsn) 
+{ 
+	tx_table[txnum].lastLSN = lsn;
+	return; 
+}
 
 /*
 * Force log records up to and including the one with the
