@@ -29,7 +29,16 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 * maxLSN to disk. Don't forget to remove them from the
 * logtail once they're written!
 */
-void LogMgr::flushLogTail(int maxLSN) { return; }
+void LogMgr::flushLogTail(int maxLSN) 
+{ 
+	std::stringstream str;
+	for (auto record : logtail)
+	{
+		str << record->toString() << "\n";
+	}
+	se->updateLog(str.str());
+	return; 
+}
 
 
 /* 
