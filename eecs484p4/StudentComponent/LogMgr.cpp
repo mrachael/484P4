@@ -36,6 +36,7 @@ void LogMgr::flushLogTail(int maxLSN)
 	{
 		str << record->toString() << "\n";
 	}
+	logtail.clear();
 	se->updateLog(str.str());
 	return; 
 }
