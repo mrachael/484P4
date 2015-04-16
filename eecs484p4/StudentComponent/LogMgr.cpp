@@ -8,6 +8,7 @@ using namespace std;
 * Find the LSN of the most recent log record for this TX.
 * If there is no previous log record for this TX, return 
 * the null LSN.
+* Rachael did this
 */
 int LogMgr::getLastLSN(int txnum) 
 {
@@ -17,6 +18,7 @@ int LogMgr::getLastLSN(int txnum)
 /*
 * Update the TX table to reflect the LSN of the most recent
 * log entry for this transaction.
+* Rachael did this
 */
 void LogMgr::setLastLSN(int txnum, int lsn) 
 { 
@@ -28,6 +30,7 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 * Force log records up to and including the one with the
 * maxLSN to disk. Don't forget to remove them from the
 * logtail once they're written!
+* Rachael did this
 */
 void LogMgr::flushLogTail(int maxLSN) 
 { 
@@ -75,8 +78,17 @@ void LogMgr::checkpoint() { return; }
 
 /*
 * Commit the specified transaction.
+* Rachael did this
 */
-void LogMgr::commit(int txid) { return; }
+void LogMgr::commit(int txid) 
+{ 
+	// The log record is appended to the log, and...
+	int next = se->nextLSN();
+	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, COMMIT));
+	// the log tail is written to stable storage, up to the commit 
+	flushLogTail(next);
+	return; 
+}
 
 /*
 * A function that StorageEngine will call when it's about to 
