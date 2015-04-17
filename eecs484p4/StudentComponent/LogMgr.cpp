@@ -48,6 +48,7 @@ void LogMgr::flushLogTail(int maxLSN)
 
 /* 
 * Run the analysis phase of ARIES.
+* Catherine did this
 */
 void LogMgr::analyze(vector <LogRecord*> log) { 
 
@@ -60,6 +61,7 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 * Run the redo phase of ARIES.
 * If the StorageEngine stops responding, return false.
 * Else when redo phase is complete, return true. 
+* Catherine did this
 */
 
 bool LogMgr::redo(vector <LogRecord*> log) { return true; }
@@ -124,25 +126,29 @@ void LogMgr::recover(string log) { return; }
 
 /*
 * Logs an update to the database and updates tables if needed.
+* Catherine did this
 */
 int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) {
-	cout << txid << " " << page_id << " " << offset << " " << input << endl;
 	int next = se->nextLSN();
 	int last;
 
+	// Determine the last LSN
 	if (tx_table.find(txid) == tx_table.end())
 		last = -1;
 	else
 		last = getLastLSN(txid);
-	setLastLSN(txid, get); 
-	cout << last << endl; //What the fuck even
+
+	// Update the last LSN for this transaction
+	setLastLSN(txid, next); 
 
 	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
 	logtail.push_back(&newRecord);
 
+	// Update dirty page table if necessary
 	if (dirty_page_table.find(page_id) == dirty_page_table.end())
 		dirty_page_table[page_id] = next;
 
+	// Update transaction table
 	txTableEntry t(last, U);
 	tx_table[next] = t;
 
