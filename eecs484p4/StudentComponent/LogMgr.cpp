@@ -54,14 +54,14 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
-	map<int, int> DPT;
-	map<int, txTableEntry> Tx; 
+	map<int, int> *DPT;
+	map<int, txTableEntry> *Tx; 
 
 	// If there is a checkpoint, retrieve the dirty page table and tx table
 	// Otherwise leave the maps empty.
 	if (checkpointLSN != -1) {
-		DPT = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
-		Tx = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
+		*DPT = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
+		*Tx = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
 	}
 	
 	// Scan log from checkpoint (if there is one) to the end of the log
@@ -73,8 +73,8 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 		// Start by adjusting tx table as necessary
 		// If an END record for a txid is found, remove txid from tx table
 		if (log[i]->getType() == END) {
-			if (Tx.find(txid) != Tx.end())
-				Tx.erase(txid);
+			if (Tx->find(txid) != Tx->end())
+				Tx->erase(txid);
 		} else {
 			// Otherwise, if it isn't already in the tx table, add it
 			TxStatus stat;
@@ -83,13 +83,13 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 			else
 				stat = U;
 
-			if (Tx.find(txid) == Tx.end()) {
+			if (Tx->find(txid) == Tx->end()) {
 				txTableEntry t(lsn, stat);
-				Tx[txid] = t;
+				(*Tx)[txid] = t;
 			} else {
 				// If it is in the table, update it
-				Tx.find(txid)->second.lastLSN = lsn;
-				Tx.find(txid)->second.status = stat;
+				Tx->find(txid)->second.lastLSN = lsn;
+				Tx->find(txid)->second.status = stat;
 			}
 		}
 
@@ -97,8 +97,8 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 		// If an update record is found and the page is not in the DPT, add it
 		if (log[i]->getType() == UPDATE) {
 			pageid = ((UpdateLogRecord*)log[i])->getPageID();
-			if (DPT.find(pageid) == DPT.end())
-				DPT[pageid] = lsn;
+			if (DPT->find(lsn) == DPT->end())
+				(*DPT)[lsn] = pageid;
 		}
 	}
 
@@ -112,7 +112,19 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 * Catherine did this
 */
 
-bool LogMgr::redo(vector <LogRecord*> log) { return true; }
+bool LogMgr::redo(vector <LogRecord*> log) { 
+	map<int, int> *DPT;
+	map<int, txTableEntry> *Tx;
+	int checkLSN = se->get_master();
+
+	*DPT = ((ChkptLogRecord*)log[checkLSN+1])->getDirtyPageTable();
+	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
+
+	for(int i = DPT->begin()->first; i < log.size(); i++) {
+
+	}
+	return true;
+}
 
 /*
 * If no txnum is specified, run the undo phase of ARIES.
