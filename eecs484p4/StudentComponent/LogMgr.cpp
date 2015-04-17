@@ -126,7 +126,10 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
 
 	for(int i = DPT->begin()->first; i < log.size(); i++) {
+		int lsn = log[i]->getLSN();
+		int txid = log[i]->getTxID();
 
+		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR)
 	}
 	return true;
 }
