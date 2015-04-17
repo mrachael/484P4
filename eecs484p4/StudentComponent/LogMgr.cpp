@@ -51,13 +51,9 @@ void LogMgr::flushLogTail(int maxLSN)
 */
 void LogMgr::analyze(vector <LogRecord*> log) { 
 
-	/* Search from the end of the log until checkpoint reached */
-	int i = log.size() - 1;
-	while (i >= 0 && log[i]->getType() != END_CKPT)
-	{
-		std::cout << log[i]->getType();
-		i--;
-	}
+	/* Locate most recent checkpoint */
+	int checkpointLSN = se->get_master();
+
 	return; }
 
 /*
@@ -116,12 +112,16 @@ void LogMgr::recover(string log) { return; }
 * Logs an update to the database and updates tables if needed.
 */
 int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) {
+	cout << txid << " " << page_id << " " << offset << " " << input << endl;
 	int next = se->nextLSN();
 	int last;
-	if (tx_table.size() == 0)
-		last = 0;
-	else 
+
+	if (tx_table.find(txid) == tx_table.end())
+		last = -1;
+	else
 		last = getLastLSN(txid);
+	setLastLSN(txid, get); 
+	cout << last << endl; //What the fuck even
 
 	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
 	logtail.push_back(&newRecord);
