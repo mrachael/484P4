@@ -59,8 +59,56 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
+	map<int, int> DPT;
+	map<int, txTableEntry> Tx; 
 
-	return; }
+	// If there is a checkpoint, retrieve the dirty page table and tx table
+	// Otherwise leave the maps empty.
+	if (checkpointLSN != -1) {
+		DPT = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
+		Tx = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
+	}
+	
+	// Scan log from checkpoint (if there is one) to the end of the log
+	for(int i = checkpointLSN + 1; i < log.size(); i++) {
+		int txid = log[i]->getTxID();
+		int lsn = log[i]->getLSN();
+		int pageid;
+
+		// Start by adjusting tx table as necessary
+		// If an END record for a txid is found, remove txid from tx table
+		if (log[i]->getType() == END) {
+			if (Tx.find(txid) != Tx.end())
+				Tx.erase(txid);
+		} else {
+			// Otherwise, if it isn't already in the tx table, add it
+			TxStatus stat;
+			if (log[i]->getType() == COMMIT)
+				stat = C;
+			else
+				stat = U;
+
+			if (Tx.find(txid) == Tx.end()) {
+				txTableEntry t(lsn, stat);
+				Tx[txid] = t;
+			} else {
+				// If it is in the table, update it
+				Tx.find(txid)->second.lastLSN = lsn;
+				Tx.find(txid)->second.status = stat;
+			}
+		}
+
+		// Adjust DPT as necessary
+		// If an update record is found and the page is not in the DPT, add it
+		if (log[i]->getType() == UPDATE) {
+			pageid = ((UpdateLogRecord*)log[i])->getPageID();
+			if (DPT.find(pageid) == DPT.end())
+				DPT[pageid] = lsn;
+		}
+	}
+
+	return;
+}
 
 /*
 * Run the redo phase of ARIES.
@@ -123,13 +171,29 @@ void LogMgr::commit(int txid)
 * A function that StorageEngine will call when it's about to 
 * write a page to disk. 
 * Remember, you need to implement write-ahead logging
+* Catherine did this
 */
-void LogMgr::pageFlushed(int page_id) { return; }
+void LogMgr::pageFlushed(int page_id) {
+	// Get LSN matching the page
+	int lsn = se->getLSN(page_id); 
+	
+
+	/*vector<LogRecord*>::iterator it = logtail.begin();
+	for (it; it != logtail.end(); it++) {
+		if ((*it)->getLSN() == lsn && (*it)->getType() == UPDATE)
+			cout << "Wheeeee\n";
+	}*/
+	return; 
+}
 
 /*
 * Recover from a crash, given the log from the disk.
+* Catherine did this
 */
-void LogMgr::recover(string log) { return; }
+void LogMgr::recover(string log) { 
+	cout << "okay but fucking why not" << endl;
+	return; 
+}
 
 /*
 * Logs an update to the database and updates tables if needed.
@@ -148,8 +212,7 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 	// Update the last LSN for this transaction
 	setLastLSN(txid, next); 
 
-	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
-	logtail.push_back(&newRecord);
+	logtail.push_back(new UpdateLogRecord(next, last, txid, page_id, offset, input, oldtext));
 
 	// Update dirty page table if necessary
 	if (dirty_page_table.find(page_id) == dirty_page_table.end())
