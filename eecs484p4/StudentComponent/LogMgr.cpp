@@ -54,7 +54,7 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
-
+	cout << checkpointLSN << endl;
 	return; }
 
 /*
@@ -116,13 +116,29 @@ void LogMgr::commit(int txid)
 * A function that StorageEngine will call when it's about to 
 * write a page to disk. 
 * Remember, you need to implement write-ahead logging
+* Catherine did this
 */
-void LogMgr::pageFlushed(int page_id) { return; }
+void LogMgr::pageFlushed(int page_id) {
+	// Get LSN matching the page
+	int lsn = se->getLSN(page_id); 
+	
+
+	vector<LogRecord*>::iterator it = logtail.begin();
+	for (it; it != logtail.end(); it++) {
+		if ((*it)->getLSN() == lsn && (*it)->getType() == UPDATE)
+			cout << "Wheeeee\n";
+	}
+	return; 
+}
 
 /*
 * Recover from a crash, given the log from the disk.
+* Catherine did this
 */
-void LogMgr::recover(string log) { return; }
+void LogMgr::recover(string log) { 
+	cout << "okay but fucking why not" << endl;
+	return; 
+}
 
 /*
 * Logs an update to the database and updates tables if needed.
@@ -141,8 +157,7 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 	// Update the last LSN for this transaction
 	setLastLSN(txid, next); 
 
-	UpdateLogRecord newRecord(next, last, txid, page_id, offset, input, oldtext);
-	logtail.push_back(&newRecord);
+	logtail.push_back(new UpdateLogRecord(next, last, txid, page_id, offset, input, oldtext));
 
 	// Update dirty page table if necessary
 	if (dirty_page_table.find(page_id) == dirty_page_table.end())
