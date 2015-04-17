@@ -84,7 +84,21 @@ void LogMgr::abort(int txid) { return; }
 /*
 * Write the begin checkpoint and end checkpoint
 */
-void LogMgr::checkpoint() { return; }
+void LogMgr::checkpoint() 
+{ 
+	// 1. Begin checkpoint record is written to indicate start
+	int beginLSN = se->nextLSN();
+	logtail.push_back(new LogRecord(beginLSN, NULL_LSN, -1, BEGIN_CKPT));
+	// 2. End checkpoint is constructed with the contents  
+	// of the txn table and dirty page table and appended to the log
+	int endLSN = se->nextLSN();
+	logtail.push_back(new ChkptLogRecord(endLSN, beginLSN, -1, tx_table, dirty_page_table));
+	// 2.5. Flush
+	flushLogTail(endLSN);
+	// 3. Master record w/ LSN of begin 
+	se->store_master(beginLSN);
+	return; 
+}
 
 /*
 * Commit the specified transaction.
