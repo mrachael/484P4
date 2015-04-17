@@ -102,8 +102,8 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 		// If an update record is found and the page is not in the DPT, add it
 		if (log[i]->getType() == UPDATE) {
 			pageid = ((UpdateLogRecord*)log[i])->getPageID();
-			if (DPT->find(lsn) == DPT->end())
-				(*DPT)[lsn] = pageid;
+			if (DPT->find(pageid) == DPT->end())
+				(*DPT)[pageid] = lsn;
 		}
 	}
 
@@ -125,12 +125,43 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 	*DPT = ((ChkptLogRecord*)log[checkLSN+1])->getDirtyPageTable();
 	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
 
-	for(int i = DPT->begin()->first; i < log.size(); i++) {
+	// Find the least recLSN
+	int leastLSN = 10000;
+	for(auto it = DPT->begin(); it != DPT->end(); it++) {
+		if (it->second < leastLSN)
+			leastLSN = it->second;
+	}
+
+	// Find all logs that must be redone
+	for(int i = leastLSN; i < log.size(); i++) {
 		int lsn = log[i]->getLSN();
 		int txid = log[i]->getTxID();
 
-		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR)
+		if (log[i]->getType() == UPDATE) {
+			int pageid = ((UpdateLogRecord*)log[i])->getPageID();
+			int offSet = ((UpdateLogRecord*)log[i])->getOffset();
+			string text = ((UpdateLogRecord*)log[i])->getAfterImage();
+			int pageLSN = se->getLSN(pageid);
+
+			// Reapply, if necessary
+			if (DPT->find(pageid) != DPT->end() && pageLSN < lsn && DPT->find(pageid)->second <= lsn) {
+				bool written = se->pageWrite(pageid, offSet, text, lsn);
+				
+				// Return false is Storage Engine got stuck
+				if (!written)
+					return false;
+			}
+		}
 	}
+
+	// Add end records for any tx with status C, and remove them from tx table
+	for(auto it = Tx->begin(); it != Tx->end(); it++) {
+		if (it->second.status == C) {
+			logtail.push_back(new LogRecord(se->nextLSN(), it->second.lastLSN, it->first, END));
+			Tx->erase(it->first);
+		}
+	}
+
 	return true;
 }
 
