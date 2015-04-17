@@ -13,6 +13,8 @@ using namespace std;
 */
 int LogMgr::getLastLSN(int txnum) 
 {
+	if (tx_table.find(txnum) == tx_table.end())
+		return NULL_LSN;
 	return tx_table[txnum].lastLSN;
 }
 
@@ -22,7 +24,9 @@ int LogMgr::getLastLSN(int txnum)
 * Rachael did this
 */
 void LogMgr::setLastLSN(int txnum, int lsn) 
-{ 
+{
+	if (tx_table.find(txnum) == tx_table.end())
+		return; 
 	tx_table[txnum].lastLSN = lsn;
 	return; 
 }
@@ -35,13 +39,14 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 */
 void LogMgr::flushLogTail(int maxLSN) 
 { 
-	std::stringstream str;
-	for (auto record : logtail)
+	//std::stringstream str;
+	for (int i = 0; i < logtail.size(); i++) //record : logtail)
 	{
-		str << record->toString() << "\n";
+		//str << record->toString() << "\n";
+		se->updateLog(logtail[i]->toString() + "\n");
 	}
 	logtail.clear();
-	se->updateLog(str.str());
+	
 	return; 
 }
 
@@ -166,6 +171,8 @@ void LogMgr::commit(int txid)
 { 
 	// The log record is appended to the log, and...
 	int next = se->nextLSN();
+	if (tx_table.find(txid) == tx_table.end())
+		return;
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, COMMIT));
 	// the log tail is written to stable storage, up to the commit 
 	flushLogTail(next);
