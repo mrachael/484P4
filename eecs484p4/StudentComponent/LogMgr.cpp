@@ -267,7 +267,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	return; 
 }
 
-vector<LogRecord*> stringToLRVector(string logstring) {
+vector<LogRecord*> LogMgr::stringToLRVector(string logstring) {
 	vector<LogRecord*> resultLogs;
 	istringstream text(logstring);
 	string line;
@@ -351,15 +351,12 @@ void LogMgr::pageFlushed(int page_id) {
 */
 void LogMgr::recover(string log) { 
 	cout << log << endl;
-	vector<LogRecord*> logs = stringToLRVector(log);
-	
-	cout << "go!\n";
+	vector<LogRecord*> logs;
+
+	logs = stringToLRVector(log);
 	analyze(logs);
-	cout << "go!\n";
 	redo(logs);
-	cout << "go!\n";
 	undo(logs);
-	cout << "go!\n";
 
 	return; 
 }
