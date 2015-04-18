@@ -253,7 +253,21 @@ void LogMgr::pageFlushed(int page_id) {
 * Catherine did this
 */
 void LogMgr::recover(string log) { 
-	cout << "okay but fucking why not" << endl;
+	cout << log << endl;
+	vector<string> logString;
+	vector<LogRecord*> logs;
+
+	int newLine = log.find("\n");
+	while (newLine != -1) {
+		logString.push_back(log.substr(0, newLine));
+		log = log.substr(newLine + 1, log.size());
+		newLine = log.find("\n");
+	}
+
+	for (auto it = logString.begin(); it != logString.end(); it++) {
+		cout << *it << endl;
+	}
+
 	return; 
 }
 
@@ -266,10 +280,7 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 	int last;
 
 	// Determine the last LSN
-	if (tx_table.find(txid) == tx_table.end())
-		last = -1;
-	else
-		last = getLastLSN(txid);
+	last = getLastLSN(txid);
 
 	// Update the last LSN for this transaction
 	setLastLSN(txid, next); 
