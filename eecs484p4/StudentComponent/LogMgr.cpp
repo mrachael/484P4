@@ -39,13 +39,14 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 */
 void LogMgr::flushLogTail(int maxLSN) 
 { 
-	//std::stringstream str;
-	for (int i = 0; i < logtail.size(); i++) //record : logtail)
+	std::stringstream str;
+	auto record = logtail.begin();
+	while ((*record)->getLSN() <= maxLSN)
 	{
-		//str << record->toString() << "\n";
-		se->updateLog(logtail[i]->toString() + "\n");
+		str << (*record)->toString() << "\n";
 	}
-	logtail.clear();
+	se->updateLog(str.str());
+	logtail.erase(logtail.begin(), ++record);
 	
 	return; 
 }
@@ -129,7 +130,7 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 		int lsn = log[i]->getLSN();
 		int txid = log[i]->getTxID();
 
-		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR)
+		//if (log[i]->getType() == UPDATE || log[i]->getType() == CLR)
 	}
 	return true;
 }
@@ -139,13 +140,41 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 * If a txnum is provided, abort that transaction.
 * Hint: the logic is very similar for these two tasks!
 */
-void LogMgr::undo(vector <LogRecord*> log, int txnum) { return; }
+void LogMgr::undo(vector <LogRecord*> log, int txnum) 
+{ 
+	/*while (!log.empty())
+	{
+		LogRecord* record = log[log.size()-1];
+
+		// If it is a CLR
+		if (record->getType() == CLR)
+		{
+			// If the undoNextLSN value is null, write an end record 
+			if (CompensationLogRecord*)record->undoNextLSN() == NULL)
+				logtail.push_back(se->nextLSN(), record->getLSN(), record->tx_id, END); 
+		} 
+		// If it is an update, write a CLR and undo the action
+		// And add the prevLSN to the set toUndo??
+		if (record->getType() == UPDATE)
+		{
+			logtail.push_back
+		}
+
+		log.pop_back();
+	}*/
+
+	return; 
+}
 
 /*
 * Abort the specified transaction.
 * Hint: you can use your undo function
 */
-void LogMgr::abort(int txid) { return; }
+void LogMgr::abort(int txid) 
+{ 
+	undo(logtail, txid);
+	return; 
+}
 
 /*
 * Write the begin checkpoint and end checkpoint
