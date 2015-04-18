@@ -40,11 +40,12 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 */
 void LogMgr::flushLogTail(int maxLSN) 
 { 
+	cout << "flushtail" << endl;
 	std::stringstream str;
 	auto record = logtail.begin();
 	while (record != logtail.end() && (*record)->getLSN() <= maxLSN)
 	{
-		str << (*record)->toString() << "\n";
+		str << (*record)->toString();
 		delete *record;
 		record++;
 	}
@@ -60,7 +61,7 @@ void LogMgr::flushLogTail(int maxLSN)
 * Catherine did this
 */
 void LogMgr::analyze(vector <LogRecord*> log) { 
-
+	cout << "analyze" << endl;
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
 
@@ -125,6 +126,7 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 */
 
 bool LogMgr::redo(vector <LogRecord*> log) { 
+	cout << "redo" << endl;
 	int checkLSN = se->get_master();
 
 	// Find the least recLSN
@@ -186,11 +188,17 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 */
 void LogMgr::undo(vector <LogRecord*> log, int txnum) 
 { 
+	cout << "undo" << endl;
 	set<int> ToUndo;
-	for (auto record : log)
-		ToUndo.insert(record->getLSN());
-
-	int checkLSN = se->get_master();
+	if (txnum == NULL_TX)
+	{
+		for (auto record : log)
+			ToUndo.insert(record->getLSN());
+	}
+	else
+	{
+		ToUndo.insert(tx_table[txnum].lastLSN);
+	}
 
 	while (!ToUndo.empty())
 	{
