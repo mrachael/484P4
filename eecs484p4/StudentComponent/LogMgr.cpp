@@ -274,7 +274,7 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 	// Update the last LSN for this transaction
 	setLastLSN(txid, next); 
 
-	logtail.push_back(new UpdateLogRecord(next, last, txid, page_id, offset, input, oldtext));
+	logtail.push_back(new UpdateLogRecord(next, last, txid, page_id, offset, oldtext, input));
 
 	// Update dirty page table if necessary
 	if (dirty_page_table.find(page_id) == dirty_page_table.end())
