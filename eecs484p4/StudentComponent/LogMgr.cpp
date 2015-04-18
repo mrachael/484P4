@@ -294,7 +294,13 @@ void LogMgr::recover(string log) {
 	}
 
 	for (auto it = logString.begin(); it != logString.end(); it++) {
-		cout << *it << endl;
+		if (it->find("write") != -1) {
+
+		} else if (it->find("commit")) {
+
+		} else if (it->find("abort")) {
+
+		}
 	}
 
 	return; 
