@@ -408,7 +408,7 @@ int LogMgr::write(int txid, int page_id, int offset, string input, string oldtex
 		dirty_page_table[page_id] = pageLSN;
 
 	// Update transaction table
-	txTableEntry t(last, U);
+	txTableEntry t(pageLSN, U);
 	tx_table[txid] = t;
 
 	return pageLSN;
