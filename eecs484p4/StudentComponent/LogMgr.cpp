@@ -44,6 +44,7 @@ void LogMgr::flushLogTail(int maxLSN)
 	while ((*record)->getLSN() <= maxLSN)
 	{
 		str << (*record)->toString() << "\n";
+		record++;
 	}
 	se->updateLog(str.str());
 	logtail.erase(logtail.begin(), ++record);
