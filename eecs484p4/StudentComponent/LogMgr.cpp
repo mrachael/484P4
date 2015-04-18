@@ -259,6 +259,19 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	return; 
 }
 
+vector<LogRecord*> stringToLRVector(string logstring) {
+	vector<LogRecord*> resultLogs;
+	istringstream text(logstring);
+	string line;
+
+	while (getline(text, line)) {
+		LogRecord* l = LogRecord::stringToRecordPtr(line);
+		resultLogs.push_back(l);
+	}
+
+	return resultLogs;
+}
+
 /*
 * Abort the specified transaction.
 * Hint: you can use your undo function
@@ -330,51 +343,8 @@ void LogMgr::pageFlushed(int page_id) {
 */
 void LogMgr::recover(string log) { 
 	cout << log << endl;
-	vector<string> logString;
-	vector<LogRecord*> logs;
-
-	int newLine = log.find("\n");
-	while (newLine != -1) {
-		logString.push_back(log.substr(0, newLine));
-		log = log.substr(newLine + 1, log.size());
-		newLine = log.find("\n");
-	}
-
-	string args[8];
-	for (auto it = logString.begin(); it != logString.end(); it++) {
-		int txid, lsn, prevLSN, pageid, offset;
-		string before, after;
-		map<int, int> DPT;
-		map<int, txTableEntry> Tx;
-		
-		int tab = it->find("\t");
-		int i = 0;
-		while (tab != -1 && i < 8) {
-			args[i] = it->substr(0, tab);
-			*it = it->substr(tab + 1, it->size());
-			tab = it->find("\t");
-		}
-
-		lsn = atoi(args[0].c_str());
-		prevLSN = atoi(args[1].c_str());
-		txid = atoi(args[2].c_str());
-		if (it->find("update") != -1) {
-			pageid = atoi(args[4].c_str());
-			offset = atoi(args[5].c_str());
-			before = args[6];
-			after = args[7];
-			logs.push_back(new UpdateLogRecord(lsn, prevLSN, txid, pageid, offset, before, after));
-		} else if (it->find("commit")) {
-			logs.push_back(new LogRecord(lsn, prevLSN, txid, COMMIT));
-		} else if (it->find("abort")) {
-			logs.push_back(new LogRecord(lsn, prevLSN, txid, ABORT));
-		} else if (it->find("end")) {
-			logs.push_back(new LogRecord(lsn, prevLSN, txid, END));
-		} else if (it->find("checkpoint")) {
-			checkpoint();
-		}
-	}
-
+	vector<LogRecord*> logs = stringToLRVector(log);
+	
 	cout << "go!\n";
 	analyze(logs);
 	cout << "go!\n";
