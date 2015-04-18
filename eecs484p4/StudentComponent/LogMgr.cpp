@@ -190,12 +190,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	for (auto record : log)
 		ToUndo.insert(record->getLSN());
 
-	map<int, int> *DPT;
-	map<int, txTableEntry> *Tx;
 	int checkLSN = se->get_master();
-
-	*DPT = ((ChkptLogRecord*)log[checkLSN+1])->getDirtyPageTable();
-	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
 
 	while (!ToUndo.empty())
 	{
@@ -223,9 +218,9 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 			UpdateLogRecord *upRecord = (UpdateLogRecord*)record;
 			int pageLSN = se->getLSN(upRecord->getPageID());
 			// Undo the action
-			if (DPT->find(upRecord->getPageID()) != DPT->end() 
+			if (dirty_page_table.find(upRecord->getPageID()) != dirty_page_table.end() 
 				&& pageLSN < record->getLSN() 
-				&& DPT->find(upRecord->getPageID())->second <= record->getLSN()) 
+				&& dirty_page_table.find(upRecord->getPageID())->second <= record->getLSN()) 
 			{
 				bool unwritten = se->pageWrite(upRecord->getPageID(), upRecord->getOffset(), upRecord->getBeforeImage(), upRecord->getLSN());
 				
