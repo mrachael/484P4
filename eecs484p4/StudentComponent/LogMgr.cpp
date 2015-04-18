@@ -41,13 +41,13 @@ void LogMgr::flushLogTail(int maxLSN)
 { 
 	std::stringstream str;
 	auto record = logtail.begin();
-	while ((*record)->getLSN() <= maxLSN)
+	while (record != logtail.end() && (*record)->getLSN() <= maxLSN)
 	{
 		str << (*record)->toString() << "\n";
 		record++;
 	}
 	se->updateLog(str.str());
-	logtail.erase(logtail.begin(), ++record);
+	logtail.erase(logtail.begin(), record + (record == logtail.end() ? 0 : 1));
 	
 	return; 
 }
