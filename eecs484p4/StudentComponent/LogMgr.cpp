@@ -1,6 +1,7 @@
 #include "LogMgr.h"
 #include <sstream>
 #include <iostream>
+#include <set>
 
 using namespace std;
 
@@ -44,6 +45,7 @@ void LogMgr::flushLogTail(int maxLSN)
 	while (record != logtail.end() && (*record)->getLSN() <= maxLSN)
 	{
 		str << (*record)->toString() << "\n";
+		delete *record;
 		record++;
 	}
 	se->updateLog(str.str());
@@ -189,26 +191,80 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 */
 void LogMgr::undo(vector <LogRecord*> log, int txnum) 
 { 
-	/*while (!log.empty())
+	set<int> ToUndo;
+	for (auto record : log)
+		ToUndo.insert(record->getLSN());
+
+	map<int, int> *DPT;
+	map<int, txTableEntry> *Tx;
+	int checkLSN = se->get_master();
+
+	*DPT = ((ChkptLogRecord*)log[checkLSN+1])->getDirtyPageTable();
+	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
+
+	while (!ToUndo.empty())
 	{
-		LogRecord* record = log[log.size()-1];
+		int L = *(ToUndo.rbegin());
+
+		LogRecord *record = nullptr;
+		for (auto rec : log)
+		{
+			if (rec->getLSN() == L)
+			{
+				record = rec;
+				break;
+			}
+		}
+		if (!record)
+		{
+			cout << "This was not supposed to happen" << endl;
+			return;
+		}
+
+		// If it is an update, write a CLR and undo the action
+		// And add the prevLSN to the set toUndo
+		if (record->getType() == UPDATE)
+		{
+			UpdateLogRecord *upRecord = (UpdateLogRecord*)record;
+			int pageLSN = se->getLSN(upRecord->getPageID());
+			// Undo the action
+			if (DPT->find(upRecord->getPageID()) != DPT->end() 
+				&& pageLSN < record->getLSN() 
+				&& DPT->find(upRecord->getPageID())->second <= record->getLSN()) 
+			{
+				bool unwritten = se->pageWrite(upRecord->getPageID(), upRecord->getOffset(), upRecord->getBeforeImage(), upRecord->getLSN());
+				
+				// Return false if Storage Engine got stuck
+				if (!unwritten)
+					return;
+			}
+
+			int next = se->nextLSN();
+			logtail.push_back(new CompensationLogRecord(
+				next, 
+				L, 
+				upRecord->getTxID(), 
+				upRecord->getPageID(), 
+				upRecord->getOffset(),
+				upRecord->getAfterImage(),
+				record->getprevLSN()));
+			ToUndo.insert(record->getprevLSN());
+		}
+
 
 		// If it is a CLR
 		if (record->getType() == CLR)
 		{
 			// If the undoNextLSN value is null, write an end record 
-			if (CompensationLogRecord*)record->undoNextLSN() == NULL)
-				logtail.push_back(se->nextLSN(), record->getLSN(), record->tx_id, END); 
+			if (((CompensationLogRecord*)record)->getUndoNextLSN() == -1)
+				logtail.push_back(new LogRecord(se->nextLSN(), record->getLSN(), record->getTxID(), END)); 
+			else
+				ToUndo.insert(((CompensationLogRecord*)record)->getUndoNextLSN()); 
 		} 
-		// If it is an update, write a CLR and undo the action
-		// And add the prevLSN to the set toUndo??
-		if (record->getType() == UPDATE)
-		{
-			logtail.push_back
-		}
 
-		log.pop_back();
-	}*/
+		ToUndo.erase(L);
+
+	}
 
 	return; 
 }
