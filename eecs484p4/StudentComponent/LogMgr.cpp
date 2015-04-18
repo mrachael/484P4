@@ -307,7 +307,7 @@ void LogMgr::abort(int txid)
 { 
 	int next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, ABORT));
-	tx_table[txid].lastLSN = next;
+	setLastLSN(txid, next);
 	undo(logtail, txid);
 	return; 
 }
@@ -342,12 +342,13 @@ void LogMgr::commit(int txid)
 	if (tx_table.find(txid) == tx_table.end())
 		return;
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, COMMIT));
-	tx_table[txid].lastLSN = next;
+	setLastLSN(txid, next);
 
 	// the log tail is written to stable storage, up to the commit 
 	flushLogTail(next);
 	next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, END));
+	
 	tx_table.erase(txid);
 
 	return; 
@@ -391,26 +392,26 @@ void LogMgr::recover(string log) {
 * Catherine did this
 */
 int LogMgr::write(int txid, int page_id, int offset, string input, string oldtext) {
-	int next = se->nextLSN();
+	int pageLSN = se->nextLSN();
 	int last;
 
 	// Determine the last LSN
 	last = getLastLSN(txid);
 
 	// Update the last LSN for this transaction
-	setLastLSN(txid, next); 
+	setLastLSN(txid, pageLSN); 
 
-	logtail.push_back(new UpdateLogRecord(next, last, txid, page_id, offset, oldtext, input));
+	logtail.push_back(new UpdateLogRecord(pageLSN, last, txid, page_id, offset, oldtext, input));
 
 	// Update dirty page table if necessary
 	if (dirty_page_table.find(page_id) == dirty_page_table.end())
-		dirty_page_table[page_id] = next;
+		dirty_page_table[page_id] = pageLSN;
 
 	// Update transaction table
 	txTableEntry t(last, U);
-	tx_table[next] = t;
+	tx_table[txid] = t;
 
-	return next;
+	return pageLSN;
 }
 
 /*
