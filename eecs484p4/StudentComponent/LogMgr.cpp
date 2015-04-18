@@ -192,14 +192,11 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	set<int> ToUndo;
 	if (txnum == NULL_TX)
 	{
-		cout << "Log LSNS: ";
-		for (auto record : log)
+		for (auto txn : tx_table)
 		{
-			cout << record->getLSN() << " ";
-			ToUndo.insert(record->getLSN());
+			if (txn.second.status == U && txn.second.lastLSN != -1)
+				ToUndo.insert(txn.second.lastLSN);
 		}
-		cout << endl;
-		cout << "rbegin: " << *(ToUndo.rbegin()) << endl;
 	}
 	else
 	{
@@ -208,13 +205,11 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 
 	while (!ToUndo.empty())
 	{
-		int L = *(ToUndo.begin());
+		int L = *(ToUndo.rbegin());
 
 		LogRecord *record = nullptr;
-		cout << "Log LSNs: ";
 		for (auto rec : log)
 		{
-			cout << "L" << rec->getLSN() << " ";
 			if (rec->getLSN() == L)
 			{
 				record = rec;
@@ -233,7 +228,21 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 		if (record->getType() == UPDATE)
 		{
 			UpdateLogRecord *upRecord = (UpdateLogRecord*)record;
+
+
 			int pageLSN = se->getLSN(upRecord->getPageID());
+
+			int next = se->nextLSN();
+			logtail.push_back(new CompensationLogRecord(
+				next, 
+				L, 
+				upRecord->getTxID(), 
+				upRecord->getPageID(), 
+				upRecord->getOffset(),
+				upRecord->getBeforeImage(),
+				record->getprevLSN()));
+			tx_table[upRecord->getTxID()].lastLSN = next;
+
 			// Undo the action
 			if (dirty_page_table.find(upRecord->getPageID()) != dirty_page_table.end() 
 				&& pageLSN < record->getLSN() 
@@ -246,16 +255,14 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 					return;
 			}
 
-			int next = se->nextLSN();
-			logtail.push_back(new CompensationLogRecord(
-				next, 
-				L, 
-				upRecord->getTxID(), 
-				upRecord->getPageID(), 
-				upRecord->getOffset(),
-				upRecord->getAfterImage(),
-				record->getprevLSN()));
-			ToUndo.insert(record->getprevLSN());
+			if (record->getprevLSN() != NULL_LSN)
+				ToUndo.insert(record->getprevLSN());
+			else
+			{
+				logtail.push_back(new LogRecord(se->nextLSN(), next, record->getTxID(), END)); 
+				tx_table.erase(txnum);
+			}
+
 		}
 
 
@@ -263,8 +270,11 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 		if (record->getType() == CLR)
 		{
 			// If the undoNextLSN value is null, write an end record 
-			if (((CompensationLogRecord*)record)->getUndoNextLSN() == -1)
+			if (((CompensationLogRecord*)record)->getUndoNextLSN() == NULL_LSN)
+			{
 				logtail.push_back(new LogRecord(se->nextLSN(), record->getLSN(), record->getTxID(), END)); 
+				tx_table.erase(txnum);
+			}
 			else
 				ToUndo.insert(((CompensationLogRecord*)record)->getUndoNextLSN()); 
 		} 
@@ -295,6 +305,9 @@ vector<LogRecord*> LogMgr::stringToLRVector(string logstring) {
 */
 void LogMgr::abort(int txid) 
 { 
+	int next = se->nextLSN();
+	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, ABORT));
+	tx_table[txid].lastLSN = next;
 	undo(logtail, txid);
 	return; 
 }
@@ -329,8 +342,14 @@ void LogMgr::commit(int txid)
 	if (tx_table.find(txid) == tx_table.end())
 		return;
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, COMMIT));
+	tx_table[txid].lastLSN = next;
+
 	// the log tail is written to stable storage, up to the commit 
 	flushLogTail(next);
+	next = se->nextLSN();
+	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, END));
+	tx_table.erase(txid);
+
 	return; 
 }
 
@@ -344,7 +363,10 @@ void LogMgr::pageFlushed(int page_id) {
 	// Get LSN matching the page
 	int lsn = se->getLSN(page_id); 
 	
+	dirty_page_table.erase(page_id);
+
 	flushLogTail(lsn);
+
 	return; 
 }
 
