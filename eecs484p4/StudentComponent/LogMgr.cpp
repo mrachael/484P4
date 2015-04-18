@@ -322,12 +322,13 @@ void LogMgr::pageFlushed(int page_id) {
 	// Get LSN matching the page
 	int lsn = se->getLSN(page_id); 
 	
-
-	/*vector<LogRecord*>::iterator it = logtail.begin();
-	for (it; it != logtail.end(); it++) {
+	for (auto it = logtail.begin(); it != logtail.end(); it++) {
 		if ((*it)->getLSN() == lsn && (*it)->getType() == UPDATE)
-			cout << "Wheeeee\n";
-	}*/
+			cout << "fuck you\n";
+	}
+
+	if (dirty_page_table.find(page_id) != dirty_page_table.end())
+		dirty_page_table.erase(page_id);
 	return; 
 }
 
@@ -378,7 +379,7 @@ void LogMgr::recover(string log) {
 		} else if (it->find("end")) {
 			logs.push_back(new LogRecord(lsn, prevLSN, txid, END));
 		} else if (it->find("checkpoint")) {
-			logs.push_back(new ChkptLogRecord(lsn, prevLSN, txid, Tx, DPT));
+			checkpoint();
 		}
 	}
 
