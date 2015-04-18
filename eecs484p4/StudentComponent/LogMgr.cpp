@@ -100,8 +100,12 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 
 		// Adjust DPT as necessary
 		// If an update record is found and the page is not in the DPT, add it
-		if (log[i]->getType() == UPDATE) {
-			pageid = ((UpdateLogRecord*)log[i])->getPageID();
+		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR) {
+			if (log[i]->getType() == UPDATE)
+				pageid = ((UpdateLogRecord*)log[i])->getPageID();
+			else
+				pageid = ((CompensationLogRecord*)log[i])->getPageID();
+
 			if (DPT->find(pageid) == DPT->end())
 				(*DPT)[pageid] = lsn;
 		}
@@ -137,10 +141,22 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 		int lsn = log[i]->getLSN();
 		int txid = log[i]->getTxID();
 
-		if (log[i]->getType() == UPDATE) {
-			int pageid = ((UpdateLogRecord*)log[i])->getPageID();
-			int offSet = ((UpdateLogRecord*)log[i])->getOffset();
-			string text = ((UpdateLogRecord*)log[i])->getAfterImage();
+
+		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR) {
+			int pageid;
+			int offSet;
+			string text;	
+
+			// Convert to the correct type and retrieve arguments
+			if (log[i]->getType() == UPDATE) {
+				pageid = ((UpdateLogRecord*)log[i])->getPageID();
+				offSet = ((UpdateLogRecord*)log[i])->getOffset();
+				text = ((UpdateLogRecord*)log[i])->getAfterImage();
+			} else {
+				pageid = ((CompensationLogRecord*)log[i])->getPageID();
+				offSet = ((CompensationLogRecord*)log[i])->getOffset();
+				text = ((CompensationLogRecord*)log[i])->getAfterImage();
+			}
 			int pageLSN = se->getLSN(pageid);
 
 			// Reapply, if necessary
