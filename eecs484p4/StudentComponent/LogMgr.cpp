@@ -63,15 +63,15 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
-	map<int, int> *DPT;
-	map<int, txTableEntry> *Tx; 
 
 	// If there is a checkpoint, retrieve the dirty page table and tx table
 	// Otherwise leave the maps empty.
 	if (checkpointLSN != -1) {
-		*DPT = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
-		*Tx = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
+		dirty_page_table = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
+		tx_table = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
 	}
+
+	cout << dirty_page_table.size() << endl;
 	
 	// Scan log from checkpoint (if there is one) to the end of the log
 	for(int i = checkpointLSN + 1; i < log.size(); i++) {
@@ -82,8 +82,8 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 		// Start by adjusting tx table as necessary
 		// If an END record for a txid is found, remove txid from tx table
 		if (log[i]->getType() == END) {
-			if (Tx->find(txid) != Tx->end())
-				Tx->erase(txid);
+			if (tx_table.find(txid) != tx_table.end())
+				tx_table.erase(txid);
 		} else {
 			// Otherwise, if it isn't already in the tx table, add it
 			TxStatus stat;
@@ -92,26 +92,25 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 			else
 				stat = U;
 
-			if (Tx->find(txid) == Tx->end()) {
+			if (tx_table.find(txid) == tx_table.end()) {
 				txTableEntry t(lsn, stat);
-				(*Tx)[txid] = t;
+				tx_table[txid] = t;
 			} else {
 				// If it is in the table, update it
-				Tx->find(txid)->second.lastLSN = lsn;
-				Tx->find(txid)->second.status = stat;
+				tx_table.find(txid)->second.lastLSN = lsn;
+				tx_table.find(txid)->second.status = stat;
 			}
 		}
-
-		// Adjust DPT as necessary
-		// If an update record is found and the page is not in the DPT, add it
+		// Adjust dirty_page_table as necessary
+		// If an update record is found and the page is not in the dirty_page_table, add it
 		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR) {
 			if (log[i]->getType() == UPDATE)
 				pageid = ((UpdateLogRecord*)log[i])->getPageID();
 			else
 				pageid = ((CompensationLogRecord*)log[i])->getPageID();
 
-			if (DPT->find(pageid) == DPT->end())
-				(*DPT)[pageid] = lsn;
+			if (dirty_page_table.find(pageid) == dirty_page_table.end())
+				dirty_page_table[pageid] = lsn;
 		}
 	}
 
@@ -126,16 +125,11 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 */
 
 bool LogMgr::redo(vector <LogRecord*> log) { 
-	map<int, int> *DPT;
-	map<int, txTableEntry> *Tx;
 	int checkLSN = se->get_master();
-
-	*DPT = ((ChkptLogRecord*)log[checkLSN+1])->getDirtyPageTable();
-	*Tx = ((ChkptLogRecord*)log[checkLSN+1])->getTxTable();
 
 	// Find the least recLSN
 	int leastLSN = 10000;
-	for(auto it = DPT->begin(); it != DPT->end(); it++) {
+	for(auto it = dirty_page_table.begin(); it != dirty_page_table.end(); it++) {
 		if (it->second < leastLSN)
 			leastLSN = it->second;
 	}
@@ -163,7 +157,8 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 			int pageLSN = se->getLSN(pageid);
 
 			// Reapply, if necessary
-			if (DPT->find(pageid) != DPT->end() && pageLSN < lsn && DPT->find(pageid)->second <= lsn) {
+			if (dirty_page_table.find(pageid) != dirty_page_table.end() && 
+				pageLSN < lsn && dirty_page_table.find(pageid)->second <= lsn) {
 				bool written = se->pageWrite(pageid, offSet, text, lsn);
 				
 				// Return false is Storage Engine got stuck
@@ -174,10 +169,10 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 	}
 
 	// Add end records for any tx with status C, and remove them from tx table
-	for(auto it = Tx->begin(); it != Tx->end(); it++) {
+	for(auto it = tx_table.begin(); it != tx_table.end(); it++) {
 		if (it->second.status == C) {
 			logtail.push_back(new LogRecord(se->nextLSN(), it->second.lastLSN, it->first, END));
-			Tx->erase(it->first);
+			tx_table.erase(it->first);
 		}
 	}
 
@@ -349,9 +344,48 @@ void LogMgr::recover(string log) {
 		newLine = log.find("\n");
 	}
 
+	string args[8];
 	for (auto it = logString.begin(); it != logString.end(); it++) {
-		cout << *it << endl;
+		int txid, lsn, prevLSN, pageid, offset;
+		string before, after;
+		map<int, int> DPT;
+		map<int, txTableEntry> Tx;
+		
+		int tab = it->find("\t");
+		int i = 0;
+		while (tab != -1 && i < 8) {
+			args[i] = it->substr(0, tab);
+			*it = it->substr(tab + 1, it->size());
+			tab = it->find("\t");
+		}
+
+		lsn = atoi(args[0].c_str());
+		prevLSN = atoi(args[1].c_str());
+		txid = atoi(args[2].c_str());
+		if (it->find("update") != -1) {
+			pageid = atoi(args[4].c_str());
+			offset = atoi(args[5].c_str());
+			before = args[6];
+			after = args[7];
+			logs.push_back(new UpdateLogRecord(lsn, prevLSN, txid, pageid, offset, before, after));
+		} else if (it->find("commit")) {
+			logs.push_back(new LogRecord(lsn, prevLSN, txid, COMMIT));
+		} else if (it->find("abort")) {
+			logs.push_back(new LogRecord(lsn, prevLSN, txid, ABORT));
+		} else if (it->find("end")) {
+			logs.push_back(new LogRecord(lsn, prevLSN, txid, END));
+		} else if (it->find("checkpoint")) {
+			logs.push_back(new ChkptLogRecord(lsn, prevLSN, txid, Tx, DPT));
+		}
 	}
+
+	cout << "go!\n";
+	analyze(logs);
+	cout << "go!\n";
+	redo(logs);
+	cout << "go!\n";
+	undo(logs);
+	cout << "go!\n";
 
 	return; 
 }
