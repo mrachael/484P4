@@ -192,8 +192,14 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	set<int> ToUndo;
 	if (txnum == NULL_TX)
 	{
+		cout << "Log LSNS: ";
 		for (auto record : log)
+		{
+			cout << record->getLSN() << " ";
 			ToUndo.insert(record->getLSN());
+		}
+		cout << endl;
+		cout << "rbegin: " << *(ToUndo.rbegin()) << endl;
 	}
 	else
 	{
@@ -202,17 +208,20 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 
 	while (!ToUndo.empty())
 	{
-		int L = *(ToUndo.rbegin());
+		int L = *(ToUndo.begin());
 
 		LogRecord *record = nullptr;
+		cout << "Log LSNs: ";
 		for (auto rec : log)
 		{
+			cout << "L" << rec->getLSN() << " ";
 			if (rec->getLSN() == L)
 			{
 				record = rec;
 				break;
 			}
 		}
+		cout << endl;
 		if (!record)
 		{
 			cout << "This was not supposed to happen" << endl;
@@ -335,13 +344,7 @@ void LogMgr::pageFlushed(int page_id) {
 	// Get LSN matching the page
 	int lsn = se->getLSN(page_id); 
 	
-	for (auto it = logtail.begin(); it != logtail.end(); it++) {
-		if ((*it)->getLSN() == lsn && (*it)->getType() == UPDATE)
-			cout << "fuck you\n";
-	}
-
-	if (dirty_page_table.find(page_id) != dirty_page_table.end())
-		dirty_page_table.erase(page_id);
+	flushLogTail(lsn);
 	return; 
 }
 
