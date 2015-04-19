@@ -1,7 +1,6 @@
 #include "LogMgr.h"
-#include <sstream>
-#include <iostream>
 #include <set>
+#include <sstream>
 
 using namespace std;
 
@@ -40,7 +39,6 @@ void LogMgr::setLastLSN(int txnum, int lsn)
 */
 void LogMgr::flushLogTail(int maxLSN) 
 { 
-	cout << "flushtail" << endl;
 	std::stringstream str;
 	auto record = logtail.begin();
 	while (record != logtail.end() && (*record)->getLSN() <= maxLSN)
@@ -61,7 +59,6 @@ void LogMgr::flushLogTail(int maxLSN)
 * Catherine did this
 */
 void LogMgr::analyze(vector <LogRecord*> log) { 
-	cout << "analyze" << endl;
 	/* Locate most recent checkpoint */
 	int checkpointLSN = se->get_master();
 
@@ -72,8 +69,6 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 		tx_table = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
 	}
 
-	cout << dirty_page_table.size() << endl;
-	
 	// Scan log from checkpoint (if there is one) to the end of the log
 	for(int i = checkpointLSN + 1; i < log.size(); i++) {
 		int txid = log[i]->getTxID();
@@ -126,21 +121,30 @@ void LogMgr::analyze(vector <LogRecord*> log) {
 */
 
 bool LogMgr::redo(vector <LogRecord*> log) { 
-	cout << "redo" << endl;
 	int checkLSN = se->get_master();
 
 	// Find the least recLSN
-	int leastLSN = 10000;
+	int leastLSN = 0;
+	if (dirty_page_table.begin() != dirty_page_table.end())
+		leastLSN = dirty_page_table.begin()->second;
+	
 	for(auto it = dirty_page_table.begin(); it != dirty_page_table.end(); it++) {
 		if (it->second < leastLSN)
 			leastLSN = it->second;
 	}
-
+	int leastLSNLogIndex = 0;
+	for (int i = 0; i < log.size(); i++)
+	{
+		if (log[i]->getLSN() == leastLSN)
+		{
+			leastLSNLogIndex = i;
+			break;
+		}
+	}
 	// Find all logs that must be redone
-	for(int i = leastLSN; i < log.size(); i++) {
+	for(int i = leastLSNLogIndex; i < log.size(); i++) {
 		int lsn = log[i]->getLSN();
 		int txid = log[i]->getTxID();
-
 		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR) {
 			int pageid;
 			int offSet;
@@ -162,10 +166,11 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 			if (dirty_page_table.find(pageid) != dirty_page_table.end() && 
 				pageLSN < lsn && dirty_page_table.find(pageid)->second <= lsn) {
 				bool written = se->pageWrite(pageid, offSet, text, lsn);
-				
 				// Return false is Storage Engine got stuck
 				if (!written)
+				{
 					return false;
+				}
 			}
 		}
 	}
@@ -173,7 +178,8 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 	// Add end records for any tx with status C, and remove them from tx table
 	for(auto it = tx_table.begin(); it != tx_table.end(); it++) {
 		if (it->second.status == C) {
-			logtail.push_back(new LogRecord(se->nextLSN(), it->second.lastLSN, it->first, END));
+			int next = se->nextLSN();
+			logtail.push_back(new LogRecord(next, it->second.lastLSN, it->first, END));
 			tx_table.erase(it->first);
 		}
 	}
@@ -188,7 +194,6 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 */
 void LogMgr::undo(vector <LogRecord*> log, int txnum) 
 { 
-	cout << "undo" << endl;
 	set<int> ToUndo;
 	if (txnum == NULL_TX)
 	{
@@ -216,10 +221,8 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 				break;
 			}
 		}
-		cout << endl;
 		if (!record)
 		{
-			cout << "This was not supposed to happen" << endl;
 			return;
 		}
 
@@ -259,12 +262,12 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 				ToUndo.insert(record->getprevLSN());
 			else
 			{
-				logtail.push_back(new LogRecord(se->nextLSN(), next, record->getTxID(), END)); 
-				tx_table.erase(txnum);
+				int next2 = se->nextLSN();
+				logtail.push_back(new LogRecord(next2, next, record->getTxID(), END)); 
+				tx_table.erase(record->getTxID());
 			}
 
 		}
-
 
 		// If it is a CLR
 		if (record->getType() == CLR)
@@ -272,8 +275,9 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 			// If the undoNextLSN value is null, write an end record 
 			if (((CompensationLogRecord*)record)->getUndoNextLSN() == NULL_LSN)
 			{
-				logtail.push_back(new LogRecord(se->nextLSN(), record->getLSN(), record->getTxID(), END)); 
-				tx_table.erase(txnum);
+				int next2 = se->nextLSN();
+				logtail.push_back(new LogRecord(next2, record->getLSN(), record->getTxID(), END)); 
+				tx_table.erase(record->getTxID());
 			}
 			else
 				ToUndo.insert(((CompensationLogRecord*)record)->getUndoNextLSN()); 
@@ -348,7 +352,6 @@ void LogMgr::commit(int txid)
 	flushLogTail(next);
 	next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, END));
-	
 	tx_table.erase(txid);
 
 	return; 
@@ -376,7 +379,6 @@ void LogMgr::pageFlushed(int page_id) {
 * Catherine did this
 */
 void LogMgr::recover(string log) { 
-	cout << log << endl;
 	vector<LogRecord*> logs;
 
 	logs = stringToLRVector(log);
