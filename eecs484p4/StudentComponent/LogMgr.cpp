@@ -41,6 +41,8 @@ void LogMgr::flushLogTail(int maxLSN)
 { 
 	std::stringstream str;
 	auto record = logtail.begin();
+	if (record != logtail.end() && maxLSN < (*record)->getLSN())
+		return;
 	while (record != logtail.end() && (*record)->getLSN() <= maxLSN)
 	{
 		str << (*record)->toString();
