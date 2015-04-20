@@ -1,0 +1,12 @@
+StorageEngine/sampleDBFile.txt
+1 write 5 0 one
+2 write 3 0 two
+2 write 1 0 three
+1 write 13 0 four
+checkpoint
+crash {3}
+checkpoint
+2 commit
+1 abort 7
+checkpoint
+end

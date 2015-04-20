@@ -1,0 +1,13 @@
+StorageEngine/sampleDBFile.txt
+1 write 5 0 one
+2 write 3 0 two
+2 write 4 0 three
+3 write 7 0 four
+3 write 9 0 ten
+2 commit
+3 commit
+crash {7}
+11 write 15 0 eleven
+10 write 13 0 twelve
+1 abort 7
+end
