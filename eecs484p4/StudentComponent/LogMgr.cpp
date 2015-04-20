@@ -216,6 +216,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	while (!ToUndo.empty())
 	{
 		int L = *(ToUndo.rbegin());
+		cout << L << endl;
 
 		LogRecord *record = nullptr;
 		for (auto rec : log)
@@ -241,7 +242,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 			int pageLSN = se->getLSN(upRecord->getPageID());
 
 			int next = se->nextLSN();
-			cout << L << endl;
+
 			logtail.push_back(new CompensationLogRecord(
 				next, 
 				L, 
@@ -329,9 +330,10 @@ void LogMgr::abort(int txid)
 		logOnDiskVector.push_back(*it);
 
 	// Undo the transaction in the whole log
+	// According to piazza this goes here setLastLSN(txid, next);
 	undo(logOnDiskVector, txid);
-	
-	if (tx_table.find(txid) == tx_table.end())
+
+	if (tx_table.find(txid) != tx_table.end())
 		tx_table.erase(txid);
 
 	setLastLSN(txid, next);
