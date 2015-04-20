@@ -1,6 +1,7 @@
 #include "LogMgr.h"
 #include <set>
 #include <sstream>
+#include <iostream>
 
 using namespace std;
 
@@ -134,6 +135,7 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 		if (it->second < leastLSN)
 			leastLSN = it->second;
 	}
+
 	int leastLSNLogIndex = 0;
 	for (int i = 0; i < log.size(); i++)
 	{
@@ -147,6 +149,7 @@ bool LogMgr::redo(vector <LogRecord*> log) {
 	for(int i = leastLSNLogIndex; i < log.size(); i++) {
 		int lsn = log[i]->getLSN();
 		int txid = log[i]->getTxID();
+
 		if (log[i]->getType() == UPDATE || log[i]->getType() == CLR) {
 			int pageid;
 			int offSet;
@@ -238,6 +241,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 			int pageLSN = se->getLSN(upRecord->getPageID());
 
 			int next = se->nextLSN();
+			cout << L << endl;
 			logtail.push_back(new CompensationLogRecord(
 				next, 
 				L, 
@@ -311,10 +315,26 @@ vector<LogRecord*> LogMgr::stringToLRVector(string logstring) {
 */
 void LogMgr::abort(int txid) 
 { 
+	/* TO BE REWRITTEN */
 	int next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, ABORT));
+
+	cout << "Retrieve the log tht has been written to disk\n";
+	string logOnDiskString = se->getLog();
+	vector<LogRecord*> logOnDiskVector;
+	logOnDiskVector = stringToLRVector(logOnDiskString);
+
+	cout << "Add logtail to the end of the retrieved log\n";
+	for (auto it = logtail.begin(); it != logtail.end(); it++)
+		logOnDiskVector.push_back(*it);
+
+	// Undo the transaction in the whole log
+	undo(logOnDiskVector, txid);
+	
+	if (tx_table.find(txid) == tx_table.end())
+		tx_table.erase(txid);
+
 	setLastLSN(txid, next);
-	undo(logtail, txid);
 	return; 
 }
 
