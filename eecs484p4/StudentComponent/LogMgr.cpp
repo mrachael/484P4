@@ -1,7 +1,6 @@
 #include "LogMgr.h"
 #include <set>
 #include <sstream>
-#include <iostream>
 
 using namespace std;
 
@@ -216,7 +215,6 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 	while (!ToUndo.empty())
 	{
 		int L = *(ToUndo.rbegin());
-		cout << L << endl;
 
 		LogRecord *record = nullptr;
 		for (auto rec : log)
@@ -237,15 +235,13 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 		if (record->getType() == UPDATE)
 		{
 			UpdateLogRecord *upRecord = (UpdateLogRecord*)record;
-
-
 			int pageLSN = se->getLSN(upRecord->getPageID());
 
 			int next = se->nextLSN();
 
 			logtail.push_back(new CompensationLogRecord(
 				next, 
-				L, 
+				getLastLSN(upRecord->getTxID()), 
 				upRecord->getTxID(), 
 				upRecord->getPageID(), 
 				upRecord->getOffset(),
@@ -276,6 +272,10 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 
 		}
 
+		if (record->getType() == ABORT) {
+			ToUndo.insert(record->getprevLSN());
+		}
+
 		// If it is a CLR
 		if (record->getType() == CLR)
 		{
@@ -288,7 +288,7 @@ void LogMgr::undo(vector <LogRecord*> log, int txnum)
 			}
 			else
 				ToUndo.insert(((CompensationLogRecord*)record)->getUndoNextLSN()); 
-		} 
+		}
 
 		ToUndo.erase(L);
 
@@ -320,23 +320,20 @@ void LogMgr::abort(int txid)
 	int next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, ABORT));
 
-	cout << "Retrieve the log tht has been written to disk\n";
 	string logOnDiskString = se->getLog();
 	vector<LogRecord*> logOnDiskVector;
 	logOnDiskVector = stringToLRVector(logOnDiskString);
 
-	cout << "Add logtail to the end of the retrieved log\n";
 	for (auto it = logtail.begin(); it != logtail.end(); it++)
 		logOnDiskVector.push_back(*it);
 
 	// Undo the transaction in the whole log
-	// According to piazza this goes here setLastLSN(txid, next);
+	setLastLSN(txid, next);
 	undo(logOnDiskVector, txid);
 
 	if (tx_table.find(txid) != tx_table.end())
 		tx_table.erase(txid);
 
-	setLastLSN(txid, next);
 	return; 
 }
 

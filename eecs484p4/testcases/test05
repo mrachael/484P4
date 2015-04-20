@@ -4,6 +4,6 @@ StorageEngine/sampleDBFile.txt
 2 write 1 0 three
 1 write 13 0 four
 2 commit
-1 abort
+1 abort 9
 checkpoint
 end
