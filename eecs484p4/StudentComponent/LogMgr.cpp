@@ -1,6 +1,7 @@
 #include "LogMgr.h"
 #include <set>
 #include <sstream>
+#include <iostream>
 
 using namespace std;
 
@@ -61,18 +62,25 @@ void LogMgr::flushLogTail(int maxLSN)
 * Catherine did this
 */
 void LogMgr::analyze(vector <LogRecord*> log) { 
-	/* Locate most recent checkpoint */
+	// Find the lsn of the most recent checkpoint
 	int checkpointLSN = se->get_master();
+	int checkpointIndex = -1;
+
+	// Find the checkpoint in the log
+	for (int i = 0; i < log.size(); i++) {
+		if (log[i]->getLSN() == checkpointLSN)
+			checkpointIndex = i;
+	}
 
 	// If there is a checkpoint, retrieve the dirty page table and tx table
 	// Otherwise leave the maps empty.
 	if (checkpointLSN != -1) {
-		dirty_page_table = ((ChkptLogRecord*)log[checkpointLSN+1])->getDirtyPageTable();
-		tx_table = ((ChkptLogRecord*)log[checkpointLSN+1])->getTxTable();
+		dirty_page_table = ((ChkptLogRecord*)log[checkpointIndex+1])->getDirtyPageTable();
+		tx_table = ((ChkptLogRecord*)log[checkpointIndex+1])->getTxTable();
 	}
 
 	// Scan log from checkpoint (if there is one) to the end of the log
-	for(int i = checkpointLSN + 1; i < log.size(); i++) {
+	for(int i = checkpointIndex + 1; i < log.size(); i++) {
 		int txid = log[i]->getTxID();
 		int lsn = log[i]->getLSN();
 		int pageid;
@@ -343,6 +351,7 @@ void LogMgr::abort(int txid)
 void LogMgr::checkpoint() 
 { 
 	// 1. Begin checkpoint record is written to indicate start
+	cout << logtail.size() << endl;
 	int beginLSN = se->nextLSN();
 	logtail.push_back(new LogRecord(beginLSN, NULL_LSN, -1, BEGIN_CKPT));
 	// 2. End checkpoint is constructed with the contents  
@@ -353,6 +362,7 @@ void LogMgr::checkpoint()
 	flushLogTail(endLSN);
 	// 3. Master record w/ LSN of begin 
 	se->store_master(beginLSN);
+	cout << logtail.size() << endl;
 	return; 
 }
 
@@ -401,9 +411,10 @@ void LogMgr::pageFlushed(int page_id) {
 */
 void LogMgr::recover(string log) { 
 	vector<LogRecord*> logs;
-
 	logs = stringToLRVector(log);
+
 	analyze(logs);
+	cout << "here\n";
 	redo(logs);
 	undo(logs);
 
