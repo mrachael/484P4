@@ -1,7 +1,6 @@
 #include "LogMgr.h"
 #include <set>
 #include <sstream>
-#include <iostream>
 
 using namespace std;
 
@@ -324,7 +323,9 @@ vector<LogRecord*> LogMgr::stringToLRVector(string logstring) {
 */
 void LogMgr::abort(int txid) 
 { 
-	/* TO BE REWRITTEN */
+	if (tx_table.find(txid) == tx_table.end())
+		return;
+
 	int next = se->nextLSN();
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, ABORT));
 
@@ -351,7 +352,6 @@ void LogMgr::abort(int txid)
 void LogMgr::checkpoint() 
 { 
 	// 1. Begin checkpoint record is written to indicate start
-	cout << logtail.size() << endl;
 	int beginLSN = se->nextLSN();
 	logtail.push_back(new LogRecord(beginLSN, NULL_LSN, -1, BEGIN_CKPT));
 	// 2. End checkpoint is constructed with the contents  
@@ -362,7 +362,6 @@ void LogMgr::checkpoint()
 	flushLogTail(endLSN);
 	// 3. Master record w/ LSN of begin 
 	se->store_master(beginLSN);
-	cout << logtail.size() << endl;
 	return; 
 }
 
@@ -378,6 +377,7 @@ void LogMgr::commit(int txid)
 		return;
 	logtail.push_back(new LogRecord(next, tx_table[txid].lastLSN, txid, COMMIT));
 	setLastLSN(txid, next);
+	tx_table.find(txid)->second.status = C;
 
 	// the log tail is written to stable storage, up to the commit 
 	flushLogTail(next);
@@ -414,7 +414,6 @@ void LogMgr::recover(string log) {
 	logs = stringToLRVector(log);
 
 	analyze(logs);
-	cout << "here\n";
 	redo(logs);
 	undo(logs);
 
